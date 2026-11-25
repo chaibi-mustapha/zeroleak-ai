@@ -2,8 +2,11 @@
 ### The Reversible On-Device Privacy Firewall & Blind Cloud Expert Workspace
 *Built with the **Firebase AI Logic Hybrid SDK** for the **#BuildHybridAI 2026 Hackathon***
 
-[![License: MIT](https://img.shields.io/badge/License-MIT-emerald.svg)](./LICENSE)
-[![Firebase AI Logic](https://img.shields.io/badge/Firebase_AI_Logic-v12.5%2B_Hybrid_SDK-teal)](https://firebase.google.com/docs/ai-logic)
+[![Live Demo](https://img.shields.io/badge/Live_Demo-zeroleak--ai--fcbf6.web.app-10b981?style=for-the-badge)](https://zeroleak-ai-fcbf6.web.app)
+[![License: MIT](https://img.shields.io/badge/License-MIT-emerald.svg?style=for-the-badge)](./LICENSE)
+[![Firebase AI Logic](https://img.shields.io/badge/Firebase_AI_Logic-Hybrid_SDK-teal?style=for-the-badge)](https://firebase.google.com/docs/ai-logic)
+
+🔗 **Try it Live in Chrome Desktop:** **https://zeroleak-ai-fcbf6.web.app**
 
 ---
 
