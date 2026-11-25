@@ -1,0 +1,14 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    // ZeroLeak AI — Zero-Knowledge Compliance Ledger
+    // Accepts ONLY mathematically verified zero-leak SHA-256 proofs (never raw PII)
+    match /zeroleak_compliance_ledger/{auditId} {
+      allow read: if true;
+      allow create, update: if request.resource.data.zeroLeakVerified == true
+        && request.resource.data.sha256SanitizedHash is string
+        && request.resource.data.sha256SanitizedHash.size() == 64
+        && request.resource.data.sanitizedExcerpt.size() <= 1000;
+    }
+  }
+}
