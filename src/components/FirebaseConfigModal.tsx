@@ -136,9 +136,11 @@ export const FirebaseConfigModal: React.FC<Props> = ({
                 </label>
                 <input
                   required
+                  type="password"
+                  autoComplete="off"
                   value={apiKey}
                   onChange={(e) => setApiKey(e.target.value)}
-                  placeholder="AIzaSy..."
+                  placeholder="••••••••••••••••••••••••"
                   className="w-full rounded-lg zl-well border border-slate-800 px-3 py-2 text-xs font-mono text-white focus:outline-none focus:border-emerald-500/70"
                 />
               </div>
@@ -160,9 +162,11 @@ export const FirebaseConfigModal: React.FC<Props> = ({
                 </label>
                 <input
                   required
+                  type="password"
+                  autoComplete="off"
                   value={appId}
                   onChange={(e) => setAppId(e.target.value)}
-                  placeholder="1:123456:web:abcdef"
+                  placeholder="••••••••••••••••••••••••"
                   className="w-full rounded-lg zl-well border border-slate-800 px-3 py-2 text-xs font-mono text-white focus:outline-none focus:border-emerald-500/70"
                 />
               </div>
