@@ -45,7 +45,25 @@ interface LiveFirebase {
 
 let live: LiveFirebase | null = null;
 
-export const DEFAULT_CLOUD_MODEL: CloudGeminiModelId = 'gemini-3.8-flash';
+export const DEFAULT_CLOUD_MODEL: CloudGeminiModelId = 'gemini-3.5-flash-lite';
+
+function withTimeout<T>(promise: Promise<T>, timeoutMs: number, label: string): Promise<T> {
+  return new Promise<T>((resolve, reject) => {
+    const timer = setTimeout(() => {
+      reject(new Error(`${label} timed out after ${timeoutMs}ms`));
+    }, timeoutMs);
+    promise.then(
+      (val) => {
+        clearTimeout(timer);
+        resolve(val);
+      },
+      (err) => {
+        clearTimeout(timer);
+        reject(err);
+      }
+    );
+  });
+}
 
 export function getInitialFirebaseConfig(): FirebaseRuntimeConfig | null {
   const envKey = import.meta.env.VITE_FIREBASE_API_KEY;
@@ -188,10 +206,14 @@ export async function runLocalVaultSanitization(
       const onDeviceModel = getGenerativeModel(live.ai, {
         mode: InferenceMode.ONLY_ON_DEVICE
       });
-      await onDeviceModel.initializeDeviceModel();
+      await withTimeout(onDeviceModel.initializeDeviceModel(), 3500, 'Nano init');
 
-      const prompt = `Extract all sensitive PII or secret entities (person full names, street addresses, organization private identifiers) from the text below as a JSON array of objects [{"category":"PERSON","value":"exact substring"}]. Allowed categories: PERSON, ADDRESS, EMAIL, PHONE, IBAN_FINANCE, GOV_ID_SSN, AMOUNT, SECRET_KEY, MEDICAL_ID. Output ONLY valid JSON array:\n\n${rawText.slice(0, 2600)}`;
-      const res = await onDeviceModel.generateContent(prompt);
+      const prompt = `Extract all sensitive PII or secret entities (person full names, street addresses, organization private identifiers) from the text below as a JSON array of objects [{"category":"PERSON","value":"exact substring"}]. Allowed categories: PERSON, ADDRESS, EMAIL, PHONE, IBAN_FINANCE, GOV_ID_SSN, AMOUNT, SECRET_KEY, MEDICAL_ID. Output ONLY valid JSON array:\n\n${rawText.slice(0, 1800)}`;
+      const res = await withTimeout(
+        onDeviceModel.generateContent(prompt),
+        7500,
+        'ONLY_ON_DEVICE scrub'
+      );
       source = mapSource(res.response.inferenceSource);
       const clean = res.response.text().replace(/```json|```/g, '').trim();
       const parsed = JSON.parse(clean);
@@ -210,9 +232,13 @@ export async function runLocalVaultSanitization(
         LanguageModel?: { create?: () => Promise<{ prompt: (q: string) => Promise<string> }> };
       };
       if (g.LanguageModel?.create) {
-        const session = await g.LanguageModel.create();
-        const out = await session.prompt(
-          `Return ONLY a JSON array [{"category":"PERSON","value":"..."}] of person names in this text:\n${rawText.slice(0, 1500)}`
+        const session = await withTimeout(g.LanguageModel.create(), 2000, 'Prompt API session');
+        const out = await withTimeout(
+          session.prompt(
+            `Return ONLY a JSON array [{"category":"PERSON","value":"..."}] of person names in this text:\n${rawText.slice(0, 1200)}`
+          ),
+          3200,
+          'Prompt API scrub'
         );
         const parsed = JSON.parse(out.replace(/```json|```/g, '').trim());
         if (Array.isArray(parsed)) aiDiscoveredSpans = parsed;
@@ -309,54 +335,56 @@ ${params.sanitizedText}
         ]
       });
 
-      const candidateModels: CloudGeminiModelId[] = Array.from(
-        new Set<CloudGeminiModelId>([
-          live.cloudModel || DEFAULT_CLOUD_MODEL,
-          'gemini-3.5-flash-lite'
-        ])
+      const cloudModelId: CloudGeminiModelId =
+        live.cloudModel && live.cloudModel !== 'gemini-3.8-flash'
+          ? live.cloudModel
+          : DEFAULT_CLOUD_MODEL;
+
+      const timeoutBudgetMs = params.simulatedOffline ? 8500 : 15000;
+
+      const hybridExpertModel = getGenerativeModel(
+        live.ai,
+        {
+          mode: requestedMode,
+          inCloudParams: {
+            model: cloudModelId,
+            generationConfig: {
+              responseMimeType: 'application/json',
+              responseSchema
+            }
+          }
+        },
+        { timeout: timeoutBudgetMs }
       );
 
-      let lastErr: unknown = null;
-      for (const cloudModelId of candidateModels) {
-        try {
-          const hybridExpertModel = getGenerativeModel(live.ai, {
-            mode: requestedMode,
-            inCloudParams: {
-              model: cloudModelId,
-              generationConfig: {
-                responseMimeType: 'application/json',
-                responseSchema
-              }
-            }
-          });
-
-          if (params.simulatedOffline) {
-            await hybridExpertModel.initializeDeviceModel().catch(() => {});
-          }
-
-          const res = await hybridExpertModel.generateContent(
-            `${outboundPrompt}\n\nReturn JSON with keys: riskScore100, riskLevel, blindExecutiveSummary, blindFindings[{title,severity,blindExplanation,blindRecommendation}], blindRedraftedActionText.`
-          );
-          const parsed = JSON.parse(res.response.text().replace(/```json|```/g, '').trim());
-
-          return {
-            domain: params.domain,
-            riskScore100: Number(parsed.riskScore100 ?? 88),
-            riskLevel: parsed.riskLevel || 'CRITICAL',
-            blindExecutiveSummary: String(parsed.blindExecutiveSummary),
-            blindFindings: Array.isArray(parsed.blindFindings) ? parsed.blindFindings : [],
-            blindRedraftedActionText: String(parsed.blindRedraftedActionText),
-            outboundPromptSentToCloud: outboundPrompt,
-            inferenceSource: mapSource(res.response.inferenceSource),
-            requestedMode: params.simulatedOffline ? 'PREFER_ON_DEVICE' : 'PREFER_IN_CLOUD',
-            latencyMs: Math.round(performance.now() - start),
-            completedAt: new Date().toISOString()
-          };
-        } catch (innerErr) {
-          lastErr = innerErr;
-        }
+      if (params.simulatedOffline) {
+        await withTimeout(hybridExpertModel.initializeDeviceModel(), 1800, 'Offline Nano init').catch(
+          () => {}
+        );
       }
-      throw lastErr;
+
+      const res = await withTimeout(
+        hybridExpertModel.generateContent(
+          `${outboundPrompt}\n\nReturn JSON with keys: riskScore100, riskLevel, blindExecutiveSummary, blindFindings[{title,severity,blindExplanation,blindRecommendation}], blindRedraftedActionText.`
+        ),
+        timeoutBudgetMs,
+        `Hybrid audit (${cloudModelId})`
+      );
+      const parsed = JSON.parse(res.response.text().replace(/```json|```/g, '').trim());
+
+      return {
+        domain: params.domain,
+        riskScore100: Number(parsed.riskScore100 ?? 88),
+        riskLevel: parsed.riskLevel || 'CRITICAL',
+        blindExecutiveSummary: String(parsed.blindExecutiveSummary),
+        blindFindings: Array.isArray(parsed.blindFindings) ? parsed.blindFindings : [],
+        blindRedraftedActionText: String(parsed.blindRedraftedActionText),
+        outboundPromptSentToCloud: outboundPrompt,
+        inferenceSource: mapSource(res.response.inferenceSource),
+        requestedMode: params.simulatedOffline ? 'PREFER_ON_DEVICE' : 'PREFER_IN_CLOUD',
+        latencyMs: Math.round(performance.now() - start),
+        completedAt: new Date().toISOString()
+      };
     } catch (err) {
       console.info('Hybrid expert demo synthesis active:', err);
     }
@@ -503,8 +531,8 @@ export async function syncZeroKnowledgeAuditToFirestore(
   if (!live) return;
   try {
     const ref = doc(collection(live.db, 'zeroleak_compliance_ledger'), item.id);
-    await setDoc(ref, item);
+    await withTimeout(setDoc(ref, item), 10000, 'Firestore zero-knowledge sync');
   } catch (err) {
-    console.warn('Firestore offline cache stored zero-knowledge audit record:', err);
+    console.info('Firestore local persistence queued zero-knowledge audit record:', err);
   }
 }

@@ -22,11 +22,22 @@ import {
   RotateCcw,
   Upload,
   Eye,
-  Compass
+  Compass,
+  Loader2,
+  ChevronRight,
+  FileText,
+  Cloud,
+  Scale,
+  HeartPulse,
+  Terminal,
+  Landmark,
+  Fingerprint,
+  KeyRound
 } from 'lucide-react';
 import {
   BlindExpertAnalysis,
   DomainMode,
+  ExpertFinding,
   FirebaseRuntimeConfig,
   SanitizationResult,
   SensitiveCategory,
@@ -50,12 +61,94 @@ import { FirebaseConfigModal } from './components/FirebaseConfigModal';
 type TopViewTab = 'wizard' | 'vault' | 'ledger';
 type WizardStep = 1 | 2 | 3 | 4;
 
+const CATEGORY_META: Record<
+  SensitiveCategory,
+  { label: string; badgeClass: string }
+> = {
+  PERSON: {
+    label: 'Identity',
+    badgeClass: 'bg-violet-500/15 text-violet-300 border-violet-500/30'
+  },
+  EMAIL: {
+    label: 'Email',
+    badgeClass: 'bg-sky-500/15 text-sky-300 border-sky-500/30'
+  },
+  PHONE: {
+    label: 'Phone',
+    badgeClass: 'bg-cyan-500/15 text-cyan-300 border-cyan-500/30'
+  },
+  IBAN_FINANCE: {
+    label: 'Bank / IBAN',
+    badgeClass: 'bg-amber-500/15 text-amber-300 border-amber-500/30'
+  },
+  GOV_ID_SSN: {
+    label: 'Gov ID / SSN',
+    badgeClass: 'bg-rose-500/15 text-rose-300 border-rose-500/30'
+  },
+  AMOUNT: {
+    label: 'Amount',
+    badgeClass: 'bg-emerald-500/15 text-emerald-300 border-emerald-500/30'
+  },
+  SECRET_KEY: {
+    label: 'Secret Key',
+    badgeClass: 'bg-fuchsia-500/15 text-fuchsia-300 border-fuchsia-500/30'
+  },
+  ADDRESS: {
+    label: 'Address',
+    badgeClass: 'bg-orange-500/15 text-orange-300 border-orange-500/30'
+  },
+  MEDICAL_ID: {
+    label: 'Medical ID',
+    badgeClass: 'bg-teal-500/15 text-teal-300 border-teal-500/30'
+  }
+};
+
+const DOMAIN_META: Record<
+  DomainMode,
+  { label: string; shortLabel: string; Icon: React.FC<{ className?: string }> }
+> = {
+  LEGAL_CONTRACT: { label: 'Legal & M&A Counsel', shortLabel: 'Legal M&A', Icon: Scale },
+  MEDICAL_CLINICAL: { label: 'Clinical Safety (HIPAA)', shortLabel: 'Cardiology', Icon: HeartPulse },
+  DEVSECOPS_INCIDENT: { label: 'DevSecOps & Secrets', shortLabel: 'DevSecOps', Icon: Terminal },
+  FINANCIAL_AUDIT: { label: 'CFO Treasury Anti-Fraud', shortLabel: 'Treasury', Icon: Landmark }
+};
+
+function getSeverityStyle(severity: ExpertFinding['severity']) {
+  switch (severity) {
+    case 'CRITICAL':
+      return {
+        pill: 'bg-rose-500/18 text-rose-300 border border-rose-500/35',
+        cardBorder: 'border-rose-500/25 hover:border-rose-500/45',
+        accentBar: 'bg-gradient-to-r from-rose-500 to-orange-500'
+      };
+    case 'HIGH':
+      return {
+        pill: 'bg-amber-500/18 text-amber-300 border border-amber-500/35',
+        cardBorder: 'border-amber-500/25 hover:border-amber-500/45',
+        accentBar: 'bg-gradient-to-r from-amber-400 to-orange-500'
+      };
+    case 'MEDIUM':
+      return {
+        pill: 'bg-sky-500/18 text-sky-300 border border-sky-500/35',
+        cardBorder: 'border-sky-500/25 hover:border-sky-500/45',
+        accentBar: 'bg-gradient-to-r from-sky-400 to-cyan-500'
+      };
+    default:
+      return {
+        pill: 'bg-emerald-500/18 text-emerald-300 border border-emerald-500/35',
+        cardBorder: 'border-emerald-500/25 hover:border-emerald-500/45',
+        accentBar: 'bg-gradient-to-r from-emerald-400 to-teal-500'
+      };
+  }
+}
+
 export const App: React.FC = () => {
   const [topTab, setTopTab] = useState<TopViewTab>('wizard');
   const [step, setStep] = useState<WizardStep>(1);
   const [quickTestOpen, setQuickTestOpen] = useState<boolean>(false);
   const [showRawOutbound, setShowRawOutbound] = useState<boolean>(false);
   const [step4CompareBlind, setStep4CompareBlind] = useState<boolean>(false);
+  const [hoveredToken, setHoveredToken] = useState<string | null>(null);
 
   const [activePresetId, setActivePresetId] = useState<string>(CONFIDENTIAL_PRESETS[0].id);
   const [domain, setDomain] = useState<DomainMode>(CONFIDENTIAL_PRESETS[0].domain);
@@ -175,8 +268,8 @@ export const App: React.FC = () => {
       };
 
       setAuditLedger((prev) => [auditItem, ...prev.slice(0, 14)]);
-      await syncZeroKnowledgeAuditToFirestore(auditItem);
       setStep(3);
+      void syncZeroKnowledgeAuditToFirestore(auditItem);
     } finally {
       setIsAnalyzingCloud(false);
     }
@@ -276,7 +369,7 @@ Prepared for Executive ${nameToUse} (Direct Contact: ${contactToUse}, Private Ac
       );
     }
     pushLog({
-      stage: next ? 'Airplane Mode Active' : 'Cloud Bridge Online',
+      stage: next ? 'Offline Mode Active' : 'Cloud Bridge Online',
       requestedMode: next ? 'ONLY_ON_DEVICE' : 'PREFER_IN_CLOUD',
       actualSource: next ? 'ON_DEVICE' : 'IN_CLOUD',
       latencyMs: 4,
@@ -289,7 +382,7 @@ Prepared for Executive ${nameToUse} (Direct Contact: ${contactToUse}, Private Ac
   const downloadComplianceCertificate = () => {
     if (!sanitization || !expertAnalysis) return;
     const cert = {
-      certificateType: 'ZeroLeak AI — Cryptographic Zero-PII Attestation',
+      certificateType: 'ZeroLeak AI — Zero-PII Verification Receipt',
       generatedAt: new Date().toISOString(),
       ephemeralKeyFingerprint: keyFingerprint,
       zeroLeakMathematicallyVerified: sanitization.zeroLeakVerified,
@@ -319,94 +412,171 @@ Prepared for Executive ${nameToUse} (Direct Contact: ${contactToUse}, Private Ac
   };
 
   const lockedCount = sanitization?.vaultEntries.length ?? 0;
+  const rawByteSize = new TextEncoder().encode(rawText).length;
 
   const wizardStepsMeta: Array<{
     num: WizardStep;
     title: string;
     subtitle: string;
     unlocked: boolean;
+    accent: 'emerald' | 'amber' | 'sky';
+    Icon: React.FC<{ className?: string }>;
   }> = [
-    { num: 1, title: 'Private Document', subtitle: 'Your PC Only', unlocked: true },
+    {
+      num: 1,
+      title: 'Private Document',
+      subtitle: 'Local RAM Only',
+      unlocked: true,
+      accent: 'emerald',
+      Icon: FileText
+    },
     {
       num: 2,
       title: 'On-Device Scrub',
       subtitle: 'Gemini Nano · AES',
-      unlocked: Boolean(sanitization)
+      unlocked: Boolean(sanitization),
+      accent: 'amber',
+      Icon: Lock
     },
     {
       num: 3,
       title: 'Blind Cloud Audit',
       subtitle: '0% PII Sent',
-      unlocked: Boolean(expertAnalysis)
+      unlocked: Boolean(expertAnalysis),
+      accent: 'sky',
+      Icon: Cloud
     },
     {
       num: 4,
       title: 'Unlocked Report',
-      subtitle: 'Local RAM',
-      unlocked: Boolean(expertAnalysis)
+      subtitle: 'Restored Locally',
+      unlocked: Boolean(expertAnalysis),
+      accent: 'emerald',
+      Icon: Unlock
     }
   ];
 
+  // Dynamic ambient radial glow color per step
+  const ambientGlowClass =
+    topTab === 'vault' || (topTab === 'wizard' && step === 2)
+      ? 'from-amber-500/10 via-orange-500/5 to-transparent'
+      : topTab === 'ledger' || (topTab === 'wizard' && step === 3)
+      ? 'from-sky-500/12 via-cyan-500/5 to-transparent'
+      : 'from-emerald-500/12 via-teal-500/5 to-transparent';
+
   return (
-    <div className="h-screen overflow-hidden bg-slate-950 text-slate-100 flex flex-col">
-      {/* SLIM 48px TOP NAVBAR */}
-      <header className="h-12 shrink-0 border-b border-slate-800/80 bg-slate-950 px-4 sm:px-6 flex items-center justify-between gap-3">
-        <div className="flex items-center gap-2 shrink-0">
-          <div className="w-7 h-7 rounded-lg bg-gradient-to-br from-emerald-400 to-teal-600 flex items-center justify-center">
-            <ShieldCheck className="w-4 h-4 text-slate-950" />
+    <div className="relative h-screen overflow-hidden zl-grid-canvas text-slate-100 flex flex-col">
+      {/* Subtle Top Ambient Radial Spotlight */}
+      <div
+        className={`pointer-events-none absolute inset-x-0 top-0 h-72 bg-radial-[ellipse_at_top] ${ambientGlowClass} transition-colors duration-500`}
+      />
+
+      {/* TOP NAVBAR */}
+      <header className="relative z-10 h-13 shrink-0 border-b border-slate-800/80 bg-slate-950/80 backdrop-blur-xl px-4 sm:px-6 flex items-center justify-between gap-3">
+        <div className="flex items-center gap-2.5 shrink-0">
+          <div className="w-8 h-8 rounded-xl bg-gradient-to-br from-emerald-400 via-emerald-500 to-teal-600 p-[1px] shadow-[0_0_18px_rgba(16,185,129,0.3)]">
+            <div className="w-full h-full rounded-[11px] bg-slate-950/20 flex items-center justify-center">
+              <ShieldCheck className="w-4.5 h-4.5 text-slate-950 stroke-[2.5]" />
+            </div>
           </div>
-          <span className="text-sm font-extrabold tracking-tight text-white">ZeroLeak AI</span>
-          <span className="hidden md:inline-block text-[10px] px-2 py-0.5 rounded-full bg-slate-900 text-emerald-400 border border-slate-800">
-            #BuildHybridAI
-          </span>
+          <div className="leading-none">
+            <div className="flex items-center gap-2">
+              <span className="text-[15px] font-extrabold tracking-tight text-white">
+                ZeroLeak AI
+              </span>
+              <span className="hidden lg:inline-flex items-center gap-1 text-[10px] font-semibold px-2 py-0.5 rounded-full bg-emerald-500/10 text-emerald-300 border border-emerald-500/25">
+                firebase/ai Hybrid
+              </span>
+            </div>
+            <p className="hidden md:block text-[10px] text-slate-400 mt-0.5">
+              On-Device Privacy Shield &amp; Blind Cloud Review
+            </p>
+          </div>
         </div>
 
-        <nav className="flex items-center gap-1 bg-slate-900 p-0.5 rounded-xl border border-slate-800">
+        {/* Center Segmented Tabs */}
+        <nav className="flex items-center gap-1 bg-slate-900/90 p-1 rounded-xl border border-slate-800/90 shadow-inner">
           <button
             onClick={() => setTopTab('wizard')}
-            className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-lg text-xs font-semibold transition cursor-pointer ${
+            className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold transition-all cursor-pointer ${
               topTab === 'wizard'
-                ? 'bg-emerald-600 text-white'
-                : 'text-slate-400 hover:text-white'
+                ? 'bg-gradient-to-b from-emerald-500 to-emerald-600 text-slate-950 font-bold shadow-[0_2px_10px_rgba(16,185,129,0.35)]'
+                : 'text-slate-400 hover:text-slate-100 hover:bg-slate-800/60'
             }`}
           >
-            <Compass className="w-3.5 h-3.5" /> Guided Assistant
+            <Compass className="w-3.5 h-3.5" /> Guided Workspace
           </button>
           <button
             onClick={() => setTopTab('vault')}
-            className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-lg text-xs font-semibold transition cursor-pointer ${
+            className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold transition-all cursor-pointer ${
               topTab === 'vault'
-                ? 'bg-amber-600 text-white'
-                : 'text-slate-400 hover:text-white'
+                ? 'bg-gradient-to-b from-amber-400 to-amber-500 text-slate-950 font-bold shadow-[0_2px_10px_rgba(245,158,11,0.35)]'
+                : 'text-slate-400 hover:text-slate-100 hover:bg-slate-800/60'
             }`}
           >
-            <Lock className="w-3.5 h-3.5" /> AES Vault ({lockedCount})
+            <Lock className="w-3.5 h-3.5" /> AES Vault
+            <span
+              className={`px-1.5 py-0.2 rounded-full text-[10px] font-mono ${
+                topTab === 'vault'
+                  ? 'bg-slate-950/20 text-slate-950'
+                  : 'bg-slate-800 text-slate-300'
+              }`}
+            >
+              {lockedCount}
+            </span>
           </button>
           <button
             onClick={() => setTopTab('ledger')}
-            className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-lg text-xs font-semibold transition cursor-pointer ${
+            className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold transition-all cursor-pointer ${
               topTab === 'ledger'
-                ? 'bg-sky-600 text-white'
-                : 'text-slate-400 hover:text-white'
+                ? 'bg-gradient-to-b from-sky-400 to-sky-500 text-slate-950 font-bold shadow-[0_2px_10px_rgba(14,165,233,0.35)]'
+                : 'text-slate-400 hover:text-slate-100 hover:bg-slate-800/60'
             }`}
           >
-            <Activity className="w-3.5 h-3.5" /> Firestore &amp; Logs ({telemetry.length})
+            <Activity className="w-3.5 h-3.5" /> Firestore &amp; Logs
+            <span
+              className={`px-1.5 py-0.2 rounded-full text-[10px] font-mono ${
+                topTab === 'ledger'
+                  ? 'bg-slate-950/20 text-slate-950'
+                  : 'bg-slate-800 text-slate-300'
+              }`}
+            >
+              {telemetry.length}
+            </span>
           </button>
         </nav>
 
+        {/* Right Controls */}
         <div className="flex items-center gap-2 shrink-0">
+          <span
+            title="Chrome Local Prompt API (Gemini Nano) Status"
+            className="hidden xl:inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-slate-900/90 border border-slate-800 text-[11px] font-medium text-slate-300"
+          >
+            <span
+              className={`w-2 h-2 rounded-full ${
+                chromeNanoStatus === 'ready'
+                  ? 'bg-emerald-400 shadow-[0_0_8px_#34d399]'
+                  : chromeNanoStatus === 'downloadable'
+                  ? 'bg-amber-400'
+                  : 'bg-teal-400'
+              }`}
+            />
+            Nano Local
+          </span>
+
           <button
             onClick={handleToggleOffline}
-            className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs font-semibold border transition cursor-pointer ${
+            title="Toggle simulated network outage to test firebase/ai on-device fallback"
+            className={`inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-xs font-semibold border transition cursor-pointer ${
               simulatedOffline
-                ? 'bg-amber-500/15 text-amber-300 border-amber-500/40'
-                : 'bg-slate-900 text-slate-300 border-slate-800 hover:border-slate-700'
+                ? 'bg-amber-500/15 text-amber-200 border-amber-500/45 shadow-[0_0_12px_rgba(245,158,11,0.18)]'
+                : 'bg-slate-900/90 text-slate-200 border-slate-800 hover:border-slate-700'
             }`}
           >
             {simulatedOffline ? (
               <>
                 <WifiOff className="w-3.5 h-3.5 text-amber-400" />
-                <span className="hidden sm:inline">Offline</span>
+                <span className="hidden sm:inline">Offline Fallback</span>
               </>
             ) : (
               <>
@@ -418,9 +588,9 @@ Prepared for Executive ${nameToUse} (Direct Contact: ${contactToUse}, Private Ac
 
           <button
             onClick={() => setIsConfigOpen(true)}
-            className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs font-semibold border cursor-pointer ${
+            className={`inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-xs font-semibold border transition cursor-pointer ${
               firebaseConnected
-                ? 'bg-emerald-500/15 text-emerald-300 border-emerald-500/40'
+                ? 'bg-emerald-500/12 text-emerald-200 border-emerald-500/35 hover:bg-emerald-500/20'
                 : 'bg-slate-900 text-slate-200 border-slate-700 hover:bg-slate-800'
             }`}
           >
@@ -432,60 +602,111 @@ Prepared for Executive ${nameToUse} (Direct Contact: ${contactToUse}, Private Ac
         </div>
       </header>
 
-      {/* ZERO-SCROLL VIEWPORT WORKSPACE */}
-      <main className="max-w-6xl w-full mx-auto px-4 sm:px-6 py-3 flex-1 min-h-0 flex flex-col gap-2.5">
+      {/* ZERO-SCROLL SINGLE VIEWPORT WORKSPACE */}
+      <main className="relative z-10 max-w-[1340px] w-full mx-auto px-4 sm:px-6 py-3 flex-1 min-h-0 flex flex-col gap-3">
         {topTab === 'wizard' && (
           <>
-            {/* TOP BAR: 4-STEP PROGRESS + BACK / NEXT BUTTONS ALWAYS AT THE TOP! */}
-            <div className="shrink-0 flex flex-wrap items-center justify-between gap-2.5 bg-slate-900/90 border border-slate-800 rounded-2xl p-2">
-              {/* Stepper Pills */}
-              <div className="flex items-center gap-1.5 flex-wrap">
-                {wizardStepsMeta.map((s) => {
+            {/* PIPELINE STEPPER & PRIMARY ACTION BAR */}
+            <div className="shrink-0 flex flex-wrap items-center justify-between gap-3 zl-surface border border-slate-800/90 rounded-2xl px-3 py-2">
+              <div className="flex items-center gap-1 sm:gap-1.5 flex-wrap">
+                {wizardStepsMeta.map((s, idx) => {
                   const isActive = step === s.num;
                   const isCompleted = step > s.num && s.unlocked;
+                  const StepIcon = s.Icon;
+
+                  const activeRing =
+                    s.accent === 'amber'
+                      ? 'bg-amber-500/15 border-amber-400/70 shadow-[0_0_20px_rgba(245,158,11,0.14)]'
+                      : s.accent === 'sky'
+                      ? 'bg-sky-500/15 border-sky-400/70 shadow-[0_0_20px_rgba(14,165,233,0.14)]'
+                      : 'bg-emerald-500/15 border-emerald-400/70 shadow-[0_0_20px_rgba(16,185,129,0.14)]';
+
+                  const activeBadge =
+                    s.accent === 'amber'
+                      ? 'bg-amber-400 text-slate-950'
+                      : s.accent === 'sky'
+                      ? 'bg-sky-400 text-slate-950'
+                      : 'bg-emerald-400 text-slate-950';
+
                   return (
-                    <button
-                      key={s.num}
-                      disabled={!s.unlocked}
-                      onClick={() => s.unlocked && setStep(s.num)}
-                      className={`px-3 py-1.5 rounded-xl border text-left transition flex items-center gap-2 ${
-                        isActive
-                          ? 'bg-emerald-950/60 border-emerald-500/70 cursor-pointer'
-                          : isCompleted
-                          ? 'bg-slate-950 border-emerald-500/30 hover:border-emerald-500/50 cursor-pointer'
-                          : s.unlocked
-                          ? 'bg-slate-950/70 border-slate-800 hover:border-slate-700 cursor-pointer'
-                          : 'bg-slate-950/30 border-slate-900 opacity-40 cursor-not-allowed'
-                      }`}
-                    >
-                      <span
-                        className={`w-5 h-5 rounded-full flex items-center justify-center text-[11px] font-extrabold shrink-0 ${
+                    <React.Fragment key={s.num}>
+                      <button
+                        disabled={!s.unlocked}
+                        onClick={() => s.unlocked && setStep(s.num)}
+                        className={`px-3 py-1.5 rounded-xl border text-left transition-all flex items-center gap-2.5 ${
                           isActive
-                            ? 'bg-emerald-500 text-slate-950'
+                            ? `${activeRing} cursor-pointer`
                             : isCompleted
-                            ? 'bg-emerald-500/20 text-emerald-300'
-                            : 'bg-slate-800 text-slate-400'
+                            ? 'bg-slate-900/90 border-emerald-500/35 hover:border-emerald-400/60 cursor-pointer'
+                            : s.unlocked
+                            ? 'bg-slate-900/75 border-slate-800 hover:border-slate-700 cursor-pointer'
+                            : 'bg-slate-950/60 border-slate-800/70 cursor-not-allowed'
                         }`}
                       >
-                        {isCompleted ? '✓' : s.num}
-                      </span>
-                      <div className="leading-tight">
-                        <div className="text-xs font-bold text-white">{s.title}</div>
-                        <div className="text-[10px] text-slate-400 hidden xl:block">
-                          {s.subtitle}
+                        <span
+                          className={`w-6 h-6 rounded-lg flex items-center justify-center text-xs font-extrabold shrink-0 transition ${
+                            isActive
+                              ? activeBadge
+                              : isCompleted
+                              ? 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/40'
+                              : s.unlocked
+                              ? 'bg-slate-800 text-slate-300'
+                              : 'bg-slate-900 text-slate-500 border border-slate-800'
+                          }`}
+                        >
+                          {isCompleted ? (
+                            <Check className="w-3.5 h-3.5 stroke-[2.8]" />
+                          ) : (
+                            <StepIcon className="w-3.5 h-3.5" />
+                          )}
+                        </span>
+                        <div className="leading-tight">
+                          <div
+                            className={`text-xs font-bold ${
+                              isActive || isCompleted
+                                ? 'text-white'
+                                : s.unlocked
+                                ? 'text-slate-200'
+                                : 'text-slate-400'
+                            }`}
+                          >
+                            <span className="text-[10px] font-mono opacity-65 mr-1">
+                              0{s.num}
+                            </span>
+                            {s.title}
+                          </div>
+                          <div
+                            className={`text-[10px] hidden xl:block ${
+                              isActive
+                                ? 'text-slate-200'
+                                : s.unlocked
+                                ? 'text-slate-400'
+                                : 'text-slate-500'
+                            }`}
+                          >
+                            {s.subtitle}
+                          </div>
                         </div>
-                      </div>
-                    </button>
+                      </button>
+
+                      {idx < wizardStepsMeta.length - 1 && (
+                        <ChevronRight
+                          className={`w-3.5 h-3.5 hidden md:block shrink-0 ${
+                            step > s.num ? 'text-emerald-400/70' : 'text-slate-700'
+                          }`}
+                        />
+                      )}
+                    </React.Fragment>
                   );
                 })}
               </div>
 
-              {/* TOP PREVIOUS / NEXT WIZARD CONTROLS — FIXED PIXEL DIMENSIONS ACROSS ALL STEPS */}
+              {/* PRIMARY WIZARD CONTROLS */}
               <div className="flex items-center gap-2 ml-auto shrink-0">
                 <button
                   disabled={step === 1 || isSanitizing || isAnalyzingCloud}
                   onClick={() => step > 1 && setStep((step - 1) as WizardStep)}
-                  className="w-28 h-9 inline-flex items-center justify-center gap-1.5 rounded-xl bg-slate-800 hover:bg-slate-700 border border-slate-600 text-white disabled:bg-slate-800/90 disabled:text-slate-300 disabled:border-slate-700 disabled:cursor-not-allowed text-xs font-bold transition cursor-pointer"
+                  className="w-24 h-9.5 inline-flex items-center justify-center gap-1.5 rounded-xl bg-slate-800/90 hover:bg-slate-700/90 border border-slate-700 text-slate-100 disabled:bg-slate-900/60 disabled:text-slate-500 disabled:border-slate-800/80 disabled:cursor-not-allowed text-xs font-semibold transition cursor-pointer"
                 >
                   <ArrowLeft className="w-3.5 h-3.5 shrink-0" /> Back
                 </button>
@@ -494,10 +715,19 @@ Prepared for Executive ${nameToUse} (Direct Contact: ${contactToUse}, Private Ac
                   <button
                     disabled={isSanitizing || !rawText.trim()}
                     onClick={() => handleGoToStep2Scrub()}
-                    className="w-52 h-9 inline-flex items-center justify-center gap-1.5 rounded-xl bg-gradient-to-r from-emerald-500 to-teal-500 hover:from-emerald-400 hover:to-teal-400 disabled:opacity-50 text-slate-950 font-extrabold text-xs shadow-md cursor-pointer"
+                    className="w-54 h-9.5 inline-flex items-center justify-center gap-2 rounded-xl bg-gradient-to-r from-emerald-400 via-emerald-500 to-teal-500 hover:from-emerald-300 hover:to-teal-400 disabled:opacity-75 text-slate-950 font-extrabold text-xs shadow-[0_4px_20px_rgba(16,185,129,0.3)] transition cursor-pointer"
                   >
-                    <span>{isSanitizing ? 'Scrubbing...' : 'Next · Scrub Locally'}</span>
-                    <ArrowRight className="w-3.5 h-3.5 shrink-0" />
+                    {isSanitizing ? (
+                      <>
+                        <Loader2 className="w-4 h-4 animate-spin shrink-0" />
+                        <span>Scrubbing in RAM...</span>
+                      </>
+                    ) : (
+                      <>
+                        <span>Next · Scrub Locally</span>
+                        <ArrowRight className="w-3.5 h-3.5 shrink-0" />
+                      </>
+                    )}
                   </button>
                 )}
 
@@ -505,26 +735,33 @@ Prepared for Executive ${nameToUse} (Direct Contact: ${contactToUse}, Private Ac
                   <button
                     disabled={isAnalyzingCloud || !sanitization.zeroLeakVerified}
                     onClick={handleGoToStep3CloudAudit}
-                    className="w-52 h-9 inline-flex items-center justify-center gap-1.5 rounded-xl bg-gradient-to-r from-amber-400 to-orange-500 hover:from-amber-300 hover:to-orange-400 disabled:opacity-50 text-slate-950 font-extrabold text-xs shadow-md cursor-pointer"
+                    className="w-54 h-9.5 inline-flex items-center justify-center gap-2 rounded-xl bg-gradient-to-r from-amber-300 via-amber-400 to-orange-400 hover:from-amber-200 hover:to-orange-300 text-slate-950 font-extrabold text-xs shadow-[0_4px_20px_rgba(245,158,11,0.3)] transition cursor-pointer"
                   >
-                    <span>
-                      {isAnalyzingCloud
-                        ? 'Auditing...'
-                        : simulatedOffline
-                        ? 'Next · Local Audit'
-                        : 'Next · Cloud Audit'}
-                    </span>
-                    <ArrowRight className="w-3.5 h-3.5 shrink-0" />
+                    {isAnalyzingCloud ? (
+                      <>
+                        <Loader2 className="w-4 h-4 animate-spin shrink-0" />
+                        <span>
+                          {simulatedOffline ? 'Running Local Audit...' : 'Auditing in Cloud...'}
+                        </span>
+                      </>
+                    ) : (
+                      <>
+                        <span>
+                          {simulatedOffline ? 'Next · Local Audit' : 'Next · Cloud Audit'}
+                        </span>
+                        <ArrowRight className="w-3.5 h-3.5 shrink-0" />
+                      </>
+                    )}
                   </button>
                 )}
 
                 {step === 3 && expertAnalysis && (
                   <button
                     onClick={handleGoToStep4Unlock}
-                    className="w-52 h-9 inline-flex items-center justify-center gap-1.5 rounded-xl bg-gradient-to-r from-emerald-400 to-teal-500 hover:from-emerald-300 hover:to-teal-400 text-slate-950 font-extrabold text-xs shadow-md cursor-pointer"
+                    className="w-54 h-9.5 inline-flex items-center justify-center gap-2 rounded-xl bg-gradient-to-r from-emerald-400 via-emerald-500 to-teal-500 hover:from-emerald-300 hover:to-teal-400 text-slate-950 font-extrabold text-xs shadow-[0_4px_20px_rgba(16,185,129,0.32)] transition cursor-pointer"
                   >
                     <Unlock className="w-3.5 h-3.5 shrink-0" />
-                    <span>Next · Unlock Report</span>
+                    <span>Next · Restore Names</span>
                     <ArrowRight className="w-3.5 h-3.5 shrink-0" />
                   </button>
                 )}
@@ -532,40 +769,51 @@ Prepared for Executive ${nameToUse} (Direct Contact: ${contactToUse}, Private Ac
                 {step === 4 && (
                   <button
                     onClick={() => setStep(1)}
-                    className="w-52 h-9 inline-flex items-center justify-center gap-1.5 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-xs shadow-md cursor-pointer"
+                    className="w-54 h-9.5 inline-flex items-center justify-center gap-2 rounded-xl bg-gradient-to-r from-slate-800 to-slate-700 hover:from-slate-700 hover:to-slate-600 border border-slate-600 text-white font-bold text-xs shadow-md transition cursor-pointer"
                   >
-                    <RotateCcw className="w-3.5 h-3.5 shrink-0" />
-                    <span>New Document</span>
+                    <RotateCcw className="w-3.5 h-3.5 shrink-0 text-emerald-400" />
+                    <span>Start New Document</span>
                   </button>
                 )}
               </div>
             </div>
 
-            {/* ==================== STEP 1: PRIVATE DOCUMENT (FITS 100% ON 1 SCREEN) ==================== */}
+            {/* ==================== STEP 1: PRIVATE DOCUMENT ==================== */}
             {step === 1 && (
-              <div className="flex-1 min-h-0 rounded-2xl bg-slate-900/85 border border-slate-800 shadow-2xl overflow-hidden flex flex-col">
-                <div className="px-5 py-2.5 border-b border-slate-800 bg-slate-900 shrink-0 flex flex-wrap items-center justify-between gap-2">
-                  <div className="flex items-center gap-2">
-                    <Cpu className="w-4 h-4 text-emerald-400" />
-                    <span className="text-sm font-bold text-white">
-                      Step 1 · Select or Paste Confidential Document (100% Local RAM)
+              <div className="zl-stage-enter flex-1 min-h-0 rounded-2xl zl-surface border border-slate-800/90 overflow-hidden flex flex-col">
+                <div className="px-5 py-2.5 border-b border-slate-800/80 bg-slate-900/70 shrink-0 flex flex-wrap items-center justify-between gap-2">
+                  <div className="flex items-center gap-2.5">
+                    <span className="w-6 h-6 rounded-lg bg-emerald-500/15 border border-emerald-500/30 flex items-center justify-center">
+                      <Cpu className="w-3.5 h-3.5 text-emerald-400" />
                     </span>
+                    <div>
+                      <span className="text-sm font-bold text-white">
+                        Step 1 · Load Sensitive Document
+                      </span>
+                      <span className="hidden md:inline text-xs text-slate-400 ml-2">
+                        Kept strictly in volatile browser RAM
+                      </span>
+                    </div>
                   </div>
 
                   <div className="flex items-center gap-2">
                     <button
                       type="button"
                       onClick={() => setQuickTestOpen((v) => !v)}
-                      className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg bg-emerald-500/15 hover:bg-emerald-500/25 text-emerald-300 border border-emerald-500/30 text-xs font-semibold cursor-pointer"
+                      className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-lg text-xs font-semibold border transition cursor-pointer ${
+                        quickTestOpen
+                          ? 'bg-emerald-500 text-slate-950 border-emerald-400 font-bold'
+                          : 'bg-emerald-500/12 hover:bg-emerald-500/22 text-emerald-300 border-emerald-500/35'
+                      }`}
                     >
-                      <Zap className="w-3 h-3" /> Test With My Name
+                      <Zap className="w-3.5 h-3.5" /> Test With My Name
                     </button>
                     <button
                       type="button"
                       onClick={() => fileInputRef.current?.click()}
-                      className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700 text-xs font-medium cursor-pointer"
+                      className="inline-flex items-center gap-1.5 px-3 py-1 rounded-lg bg-slate-800/90 hover:bg-slate-700/90 text-slate-200 border border-slate-700 text-xs font-semibold transition cursor-pointer"
                     >
-                      <Upload className="w-3 h-3 text-emerald-400" /> Load .txt / .env
+                      <Upload className="w-3.5 h-3.5 text-emerald-400" /> Upload .txt / .env
                     </button>
                     <input
                       ref={fileInputRef}
@@ -581,99 +829,158 @@ Prepared for Executive ${nameToUse} (Direct Contact: ${contactToUse}, Private Ac
                   {quickTestOpen && (
                     <form
                       onSubmit={handleJudgeInstantTest}
-                      className="shrink-0 p-2.5 rounded-xl bg-emerald-950/30 border border-emerald-500/40 flex flex-wrap items-center gap-2"
+                      className="shrink-0 p-2.5 rounded-xl bg-emerald-950/35 border border-emerald-500/40 flex flex-wrap items-center gap-2"
                     >
                       <input
                         value={judgeName}
                         onChange={(e) => setJudgeName(e.target.value)}
                         placeholder="Your Name (e.g. Alex Rivera)"
-                        className="flex-1 min-w-[150px] rounded-lg bg-slate-950 border border-slate-700 px-3 py-1.5 text-xs text-white"
+                        className="flex-1 min-w-[150px] rounded-lg zl-well border border-slate-700 px-3 py-1.5 text-xs text-white focus:outline-none focus:border-emerald-400"
                       />
                       <input
                         value={judgeContact}
                         onChange={(e) => setJudgeContact(e.target.value)}
                         placeholder="Your Email or Phone"
-                        className="flex-1 min-w-[150px] rounded-lg bg-slate-950 border border-slate-700 px-3 py-1.5 text-xs text-white"
+                        className="flex-1 min-w-[150px] rounded-lg zl-well border border-slate-700 px-3 py-1.5 text-xs text-white focus:outline-none focus:border-emerald-400"
                       />
                       <input
                         value={judgeAmount}
                         onChange={(e) => setJudgeAmount(e.target.value)}
                         placeholder="$950,000"
-                        className="w-24 rounded-lg bg-slate-950 border border-slate-700 px-2.5 py-1.5 text-xs font-mono text-white"
+                        className="w-28 rounded-lg zl-well border border-slate-700 px-2.5 py-1.5 text-xs font-mono text-white focus:outline-none focus:border-emerald-400"
                       />
                       <button
                         type="submit"
-                        className="px-3.5 py-1.5 rounded-lg bg-emerald-500 hover:bg-emerald-400 text-slate-950 font-bold text-xs cursor-pointer"
+                        className="px-4 py-1.5 rounded-lg bg-gradient-to-r from-emerald-400 to-teal-500 hover:from-emerald-300 hover:to-teal-400 text-slate-950 font-extrabold text-xs cursor-pointer"
                       >
                         Inject &amp; Scrub →
                       </button>
                     </form>
                   )}
 
-                  <div className="shrink-0 grid grid-cols-1 sm:grid-cols-12 gap-2.5">
-                    <div className="sm:col-span-8">
-                      <select
-                        value={activePresetId}
-                        onChange={(e) => handlePresetSelect(e.target.value)}
-                        className="w-full rounded-xl bg-slate-950 border border-slate-700 px-3 py-1.5 text-xs font-semibold text-white focus:outline-none focus:border-emerald-500"
-                      >
-                        {CONFIDENTIAL_PRESETS.map((p) => (
-                          <option key={p.id} value={p.id}>
-                            Scenario: {p.title} — [{p.badge}]
-                          </option>
-                        ))}
-                        {activePresetId === 'custom_judge' && (
-                          <option value="custom_judge">✨ Custom Self-Test Document</option>
-                        )}
-                        {activePresetId === 'uploaded_file' && (
-                          <option value="uploaded_file">📂 Uploaded File: {docTitle}</option>
-                        )}
-                      </select>
-                    </div>
-                    <div className="sm:col-span-4">
-                      <select
-                        value={domain}
-                        onChange={(e) => setDomain(e.target.value as DomainMode)}
-                        className="w-full rounded-xl bg-slate-950 border border-slate-700 px-3 py-1.5 text-xs font-semibold text-white"
-                      >
-                        <option value="LEGAL_CONTRACT">⚖️ Legal &amp; M&amp;A Counsel</option>
-                        <option value="MEDICAL_CLINICAL">🩺 Clinical Safety (HIPAA)</option>
-                        <option value="DEVSECOPS_INCIDENT">🔐 DevSecOps &amp; Secrets</option>
-                        <option value="FINANCIAL_AUDIT">🏦 CFO Treasury Anti-Fraud</option>
-                      </select>
-                    </div>
+                  {/* 4 INTERACTIVE SCENARIO CARDS */}
+                  <div className="shrink-0 grid grid-cols-2 lg:grid-cols-4 gap-2.5">
+                    {CONFIDENTIAL_PRESETS.map((p) => {
+                      const isSelected = activePresetId === p.id;
+                      const meta = DOMAIN_META[p.domain];
+                      const DomainIcon = meta.Icon;
+                      return (
+                        <button
+                          key={p.id}
+                          type="button"
+                          onClick={() => handlePresetSelect(p.id)}
+                          className={`group p-2.5 rounded-xl border text-left transition-all cursor-pointer flex items-start gap-2.5 ${
+                            isSelected
+                              ? 'bg-emerald-950/35 border-emerald-500/60 shadow-[0_0_20px_rgba(16,185,129,0.12)]'
+                              : 'zl-well border-slate-800/90 hover:border-slate-700'
+                          }`}
+                        >
+                          <div
+                            className={`w-7 h-7 rounded-lg flex items-center justify-center shrink-0 mt-0.5 ${
+                              isSelected
+                                ? 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/40'
+                                : 'bg-slate-900 text-slate-400 group-hover:text-slate-200 border border-slate-800'
+                            }`}
+                          >
+                            <DomainIcon className="w-3.5 h-3.5" />
+                          </div>
+                          <div className="min-w-0 flex-1">
+                            <div className="flex items-center justify-between gap-1">
+                              <span
+                                className={`text-xs font-bold truncate ${
+                                  isSelected ? 'text-white' : 'text-slate-200'
+                                }`}
+                              >
+                                {meta.shortLabel}
+                              </span>
+                              <span
+                                className={`text-[9px] font-semibold px-1.5 py-0.5 rounded shrink-0 ${
+                                  isSelected
+                                    ? 'bg-emerald-500/20 text-emerald-300'
+                                    : 'bg-slate-900 text-slate-400'
+                                }`}
+                              >
+                                {p.badge.split('/')[0].trim()}
+                              </span>
+                            </div>
+                            <div className="text-[11px] text-slate-400 truncate mt-0.5">
+                              {p.title.replace(/^\d+\.\s*/, '')}
+                            </div>
+                          </div>
+                        </button>
+                      );
+                    })}
                   </div>
 
-                  <textarea
-                    value={rawText}
-                    onChange={(e) => setRawText(e.target.value)}
-                    placeholder="Paste your confidential contract, patient note, wire request, or .env crash dump here..."
-                    className="w-full flex-1 min-h-0 rounded-xl bg-slate-950 border border-slate-800 p-3.5 text-xs font-mono text-slate-100 leading-relaxed focus:outline-none focus:border-emerald-500 resize-none overflow-y-auto"
-                  />
+                  {/* CONFIDENTIAL RAM EDITOR */}
+                  <div className="flex-1 min-h-0 rounded-xl zl-well border border-slate-800/90 focus-within:border-emerald-500/60 transition flex flex-col overflow-hidden">
+                    <div className="px-3.5 py-1.5 border-b border-slate-800/80 bg-slate-950/70 flex flex-wrap items-center justify-between gap-2 text-[11px]">
+                      <div className="flex items-center gap-2 text-slate-400 font-mono">
+                        <span className="w-2 h-2 rounded-full bg-emerald-400" />
+                        <span>LOCAL RAM BUFFER · ZERO NETWORK CALLS</span>
+                        <span className="hidden sm:inline text-slate-600">|</span>
+                        <span className="hidden sm:inline text-slate-300 truncate max-w-[320px]">
+                          {docTitle}
+                        </span>
+                      </div>
+
+                      <div className="flex items-center gap-3">
+                        <label className="inline-flex items-center gap-1.5 text-slate-400">
+                          <span>Expert Role:</span>
+                          <select
+                            value={domain}
+                            onChange={(e) => setDomain(e.target.value as DomainMode)}
+                            className="rounded-md bg-slate-900 border border-slate-700/80 px-2 py-0.5 text-[11px] font-semibold text-emerald-300 focus:outline-none cursor-pointer"
+                          >
+                            <option value="LEGAL_CONTRACT">Legal &amp; M&amp;A</option>
+                            <option value="MEDICAL_CLINICAL">Clinical HIPAA</option>
+                            <option value="DEVSECOPS_INCIDENT">DevSecOps</option>
+                            <option value="FINANCIAL_AUDIT">CFO Treasury</option>
+                          </select>
+                        </label>
+                        <span className="font-mono text-slate-500">{rawByteSize} B</span>
+                      </div>
+                    </div>
+
+                    <textarea
+                      value={rawText}
+                      onChange={(e) => setRawText(e.target.value)}
+                      placeholder="Paste your confidential contract, clinical note, wire request, or .env stack trace here..."
+                      className="w-full flex-1 min-h-0 bg-transparent p-4 text-[12.5px] font-mono text-slate-100 leading-relaxed focus:outline-none resize-none overflow-y-auto"
+                    />
+                  </div>
                 </div>
               </div>
             )}
 
             {/* ==================== STEP 2: ON-DEVICE PRIVACY FIREWALL ==================== */}
             {step === 2 && sanitization && (
-              <div className="flex-1 min-h-0 rounded-2xl bg-slate-900/85 border border-slate-800 shadow-2xl overflow-hidden flex flex-col">
-                <div className="px-5 py-2.5 border-b border-slate-800 bg-slate-900 shrink-0 flex flex-wrap items-center justify-between gap-2">
-                  <div className="flex items-center gap-2">
-                    <Lock className="w-4 h-4 text-amber-400" />
-                    <span className="text-sm font-bold text-white">
-                      Step 2 · On-Device Sanitization Preview
+              <div className="zl-stage-enter flex-1 min-h-0 rounded-2xl zl-surface border border-amber-500/25 overflow-hidden flex flex-col">
+                <div className="px-5 py-2.5 border-b border-slate-800/80 bg-slate-900/70 shrink-0 flex flex-wrap items-center justify-between gap-2">
+                  <div className="flex items-center gap-2.5 flex-wrap">
+                    <span className="w-6 h-6 rounded-lg bg-amber-500/15 border border-amber-500/35 flex items-center justify-center">
+                      <Lock className="w-3.5 h-3.5 text-amber-400" />
                     </span>
-                    <span className="text-[11px] font-mono text-slate-400">
-                      (ONLY_ON_DEVICE · {sanitization.inferenceSource} · {sanitization.latencyMs} ms)
+                    <span className="text-sm font-bold text-white">
+                      Step 2 · On-Device Sanitization Vault
+                    </span>
+                    <span className="px-2 py-0.5 rounded-md bg-slate-950/90 border border-slate-800 text-[11px] font-mono text-slate-300">
+                      ONLY_ON_DEVICE · {sanitization.inferenceSource} · {sanitization.latencyMs} ms
                     </span>
                   </div>
 
-                  <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full bg-emerald-500/15 border border-emerald-500/40 text-emerald-300 text-xs font-bold">
-                    <ShieldCheck className="w-3.5 h-3.5" /> 0% Leak Verified ({lockedCount} Locked)
-                  </span>
+                  <div className="flex items-center gap-2">
+                    <span className="hidden sm:inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full bg-slate-950/90 border border-slate-800 text-[11px] font-mono text-slate-400">
+                      <KeyRound className="w-3 h-3 text-amber-400" /> {keyFingerprint}
+                    </span>
+                    <span className="inline-flex items-center gap-1.5 px-3 py-0.5 rounded-full bg-emerald-500/15 border border-emerald-500/40 text-emerald-300 text-xs font-bold shadow-[0_0_15px_rgba(16,185,129,0.15)]">
+                      <ShieldCheck className="w-3.5 h-3.5" /> 0% Leak Verified ({lockedCount} Locked)
+                    </span>
+                  </div>
                 </div>
 
                 <div className="p-4 flex-1 min-h-0 grid grid-cols-1 lg:grid-cols-12 gap-4">
+                  {/* LEFT COLUMN: AES-256 VAULT SECRETS */}
                   <div className="lg:col-span-5 min-h-0 flex flex-col gap-2.5">
                     <div className="shrink-0 flex gap-2">
                       <input
@@ -683,54 +990,87 @@ Prepared for Executive ${nameToUse} (Direct Contact: ${contactToUse}, Private Ac
                           e.key === 'Enter' &&
                           (e.preventDefault(), handleAddCustomSecretInStep2())
                         }
-                        placeholder="Add custom word to mask..."
-                        className="flex-1 rounded-xl bg-slate-950 border border-slate-800 px-3 py-1.5 text-xs text-white"
+                        placeholder="Add custom term or codename to mask..."
+                        className="flex-1 rounded-xl zl-well border border-slate-800 px-3.5 py-2 text-xs text-white placeholder:text-slate-500 focus:outline-none focus:border-amber-500/60"
                       />
                       <button
                         type="button"
                         onClick={handleAddCustomSecretInStep2}
-                        className="inline-flex items-center gap-1 px-3 py-1.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-xs font-semibold text-slate-200 cursor-pointer"
+                        className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 border border-slate-700 text-xs font-bold text-amber-300 transition cursor-pointer"
                       >
                         <Plus className="w-3.5 h-3.5" /> Lock
                       </button>
                     </div>
 
-                    <div className="flex-1 min-h-0 space-y-1.5 overflow-y-auto pr-1">
-                      {sanitization.vaultEntries.map((v) => (
-                        <div
-                          key={v.token}
-                          className="p-2 rounded-xl bg-slate-950 border border-slate-800 flex items-center justify-between gap-2 text-xs"
-                        >
-                          <div className="min-w-0">
-                            <div className="font-semibold text-rose-300 truncate">
-                              {v.originalValue}
+                    <div className="flex-1 min-h-0 space-y-2 overflow-y-auto pr-1">
+                      {sanitization.vaultEntries.map((v) => {
+                        const catMeta = CATEGORY_META[v.category];
+                        const isHovered = hoveredToken === v.token;
+                        return (
+                          <div
+                            key={v.token}
+                            onMouseEnter={() => setHoveredToken(v.token)}
+                            onMouseLeave={() => setHoveredToken(null)}
+                            className={`p-2.5 rounded-xl zl-well border transition-all flex items-center justify-between gap-2.5 text-xs ${
+                              isHovered
+                                ? 'border-amber-400/70 shadow-[0_0_16px_rgba(245,158,11,0.15)]'
+                                : 'border-slate-800/90 hover:border-slate-700'
+                            }`}
+                          >
+                            <div className="min-w-0 flex-1">
+                              <div className="flex items-center gap-2 mb-0.5">
+                                <span
+                                  className={`text-[9px] font-bold uppercase tracking-wider px-1.5 py-0.2 rounded border ${catMeta.badgeClass}`}
+                                >
+                                  {catMeta.label}
+                                </span>
+                                {v.occurrences > 1 && (
+                                  <span className="text-[10px] font-mono text-slate-400">
+                                    ×{v.occurrences}
+                                  </span>
+                                )}
+                              </div>
+                              <div className="font-semibold text-rose-200 truncate">
+                                {v.originalValue}
+                              </div>
+                              <div className="text-[10px] font-mono text-slate-500 truncate">
+                                AES-GCM · {v.aesCipherHex}...
+                              </div>
                             </div>
-                            <div className="text-[10px] font-mono text-slate-500">
-                              AES-GCM: {v.aesCipherHex}...
-                            </div>
+                            <span
+                              className={`px-2 py-1 rounded-md font-mono text-[10.5px] font-semibold shrink-0 transition ${
+                                isHovered
+                                  ? 'bg-amber-400/25 border border-amber-300 text-amber-100'
+                                  : 'bg-amber-500/12 border border-amber-500/35 text-amber-300'
+                              }`}
+                            >
+                              {v.token}
+                            </span>
                           </div>
-                          <span className="px-2 py-0.5 rounded-md bg-amber-500/15 border border-amber-500/35 text-amber-300 font-mono text-[10px] shrink-0">
-                            {v.token}
-                          </span>
-                        </div>
-                      ))}
+                        );
+                      })}
                     </div>
                   </div>
 
-                  <div className="lg:col-span-7 min-h-0 flex flex-col gap-1.5">
-                    <div className="shrink-0 flex items-center justify-between text-[11px]">
-                      <span className="font-bold text-amber-300 uppercase tracking-wider">
-                        Exact Anonymous Document Ready for Cloud
+                  {/* RIGHT COLUMN: SANITIZED PAYLOAD PREVIEW */}
+                  <div className="lg:col-span-7 min-h-0 rounded-xl zl-well border border-amber-500/30 flex flex-col overflow-hidden">
+                    <div className="px-4 py-2 border-b border-slate-800/90 bg-slate-950/70 shrink-0 flex flex-wrap items-center justify-between gap-2 text-[11px]">
+                      <span className="font-bold text-amber-300 uppercase tracking-wider flex items-center gap-1.5">
+                        <Fingerprint className="w-3.5 h-3.5 text-amber-400" />
+                        Exact Anonymous Payload Ready for Cloud
                       </span>
-                      <span className="font-mono text-slate-500">
+                      <span className="font-mono text-slate-400 bg-slate-900/90 px-2 py-0.5 rounded border border-slate-800">
                         SHA-256: {sanitization.sha256SanitizedHash.slice(0, 18)}...
                       </span>
                     </div>
-                    <div className="flex-1 min-h-0 rounded-xl bg-slate-950 border border-amber-500/30 p-3.5 text-xs font-mono text-slate-200 leading-relaxed overflow-y-auto">
+
+                    <div className="flex-1 min-h-0 p-4 text-[12.5px] font-mono text-slate-200 overflow-y-auto">
                       <TokenizedTextHighlighter
                         text={sanitization.sanitizedText}
                         vaultEntries={sanitization.vaultEntries}
                         mode="BLIND_CLOUD"
+                        highlightedToken={hoveredToken}
+                        onHoverToken={setHoveredToken}
                       />
                     </div>
                   </div>
@@ -738,76 +1078,117 @@ Prepared for Executive ${nameToUse} (Direct Contact: ${contactToUse}, Private Ac
               </div>
             )}
 
-            {/* ==================== STEP 3: BLIND CLOUD EXPERT (ZERO SCROLL GRID!) ==================== */}
+            {/* ==================== STEP 3: BLIND CLOUD EXPERT ==================== */}
             {step === 3 && expertAnalysis && sanitization && (
-              <div className="flex-1 min-h-0 rounded-2xl bg-slate-900/85 border border-slate-800 shadow-2xl overflow-hidden flex flex-col">
-                <div className="px-5 py-2.5 border-b border-slate-800 bg-slate-900 shrink-0 flex flex-wrap items-center justify-between gap-2">
-                  <div className="flex items-center gap-2">
-                    <span className="text-sm font-bold text-white">
-                      Step 3 · Blind Cloud Audit — Proof That Google Saw Zero Names!
+              <div className="zl-stage-enter flex-1 min-h-0 rounded-2xl zl-surface border border-sky-500/25 overflow-hidden flex flex-col">
+                <div className="px-5 py-2.5 border-b border-slate-800/80 bg-slate-900/70 shrink-0 flex flex-wrap items-center justify-between gap-2">
+                  <div className="flex items-center gap-2.5 flex-wrap">
+                    <span className="w-6 h-6 rounded-lg bg-sky-500/15 border border-sky-500/35 flex items-center justify-center">
+                      <Cloud className="w-3.5 h-3.5 text-sky-400" />
                     </span>
-                    <span className="text-[11px] px-2 py-0.5 rounded bg-slate-950 border border-slate-800 font-mono text-sky-300">
-                      {expertAnalysis.inferenceSource} · {expertAnalysis.latencyMs} ms
+                    <span className="text-sm font-bold text-white">
+                      Step 3 · Blind Cloud Expert Review
+                    </span>
+                    <span className="text-[11px] px-2 py-0.5 rounded-md bg-slate-950/90 border border-slate-800 font-mono text-sky-300">
+                      {expertAnalysis.requestedMode} → {expertAnalysis.inferenceSource} ·{' '}
+                      {expertAnalysis.latencyMs} ms
                     </span>
                   </div>
 
                   <button
                     onClick={() => setShowRawOutbound((v) => !v)}
-                    className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-slate-800 hover:bg-slate-700 text-xs text-amber-300 border border-slate-700 cursor-pointer"
+                    className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-lg text-xs font-semibold border transition cursor-pointer ${
+                      showRawOutbound
+                        ? 'bg-amber-400 text-slate-950 border-amber-300 font-bold'
+                        : 'bg-slate-800/90 hover:bg-slate-700 text-amber-300 border-slate-700'
+                    }`}
                   >
                     <Eye className="w-3.5 h-3.5" />
-                    {showRawOutbound ? 'Show Blind Findings' : 'Inspect Outbound Prompt'}
+                    {showRawOutbound ? 'Back to Blind Findings' : 'Inspect Raw Outbound Prompt'}
                   </button>
                 </div>
 
                 <div className="p-4 flex-1 min-h-0 flex flex-col gap-3 overflow-y-auto">
-                  <div className="shrink-0 px-3.5 py-2.5 rounded-xl bg-sky-950/35 border border-sky-500/30 text-xs text-sky-200 flex items-center justify-between gap-3">
-                    <span>
-                      👀 <strong>Notice the orange locks below:</strong> Cloud Gemini diagnosed{' '}
-                      <strong className="text-rose-300">
-                        {expertAnalysis.riskLevel} ({expertAnalysis.riskScore100}/100)
-                      </strong>{' '}
-                      using <strong>only anonymous tokens</strong> — zero real names or amounts left your PC!
-                    </span>
-                  </div>
-
                   {showRawOutbound ? (
-                    <pre className="flex-1 min-h-0 p-3.5 rounded-xl bg-slate-950 border border-slate-800 text-xs font-mono text-amber-200/90 whitespace-pre-wrap overflow-y-auto">
-                      {expertAnalysis.outboundPromptSentToCloud}
-                    </pre>
+                    <div className="flex-1 min-h-0 rounded-xl zl-well border border-amber-500/30 flex flex-col overflow-hidden">
+                      <div className="px-4 py-2 border-b border-slate-800 bg-slate-950/80 text-[11px] font-mono text-amber-300 flex items-center justify-between">
+                        <span>VERBATIM HTTPS PAYLOAD SENT TO GOOGLE CLOUD</span>
+                        <span>0 RAW PII SUBSTRINGS</span>
+                      </div>
+                      <pre className="flex-1 min-h-0 p-4 text-xs font-mono text-amber-100/90 whitespace-pre-wrap leading-relaxed overflow-y-auto">
+                        {expertAnalysis.outboundPromptSentToCloud}
+                      </pre>
+                    </div>
                   ) : (
                     <>
-                      <div className="shrink-0 p-3.5 rounded-xl bg-slate-950 border border-slate-800 text-xs text-slate-200 leading-relaxed">
-                        <TokenizedTextHighlighter
-                          text={expertAnalysis.blindExecutiveSummary}
-                          vaultEntries={sanitization.vaultEntries}
-                          mode="BLIND_CLOUD"
-                        />
-                      </div>
-
-                      <div className="grid grid-cols-1 md:grid-cols-3 gap-3 flex-1 min-h-0">
-                        {expertAnalysis.blindFindings.map((f, idx) => (
-                          <div
-                            key={idx}
-                            className="p-3.5 rounded-xl bg-slate-950 border border-slate-800 flex flex-col justify-between gap-2 text-xs overflow-y-auto"
-                          >
-                            <div className="space-y-1.5">
-                              <div className="flex items-start justify-between gap-2">
-                                <span className="font-bold text-white leading-snug">{f.title}</span>
-                                <span className="px-2 py-0.5 rounded bg-rose-500/20 text-rose-300 text-[10px] font-bold shrink-0">
-                                  {f.severity}
-                                </span>
-                              </div>
-                              <p className="text-slate-300 leading-relaxed">
-                                <TokenizedTextHighlighter
-                                  text={f.blindExplanation}
-                                  vaultEntries={sanitization.vaultEntries}
-                                  mode="BLIND_CLOUD"
-                                />
-                              </p>
+                      {/* EXECUTIVE SUMMARY + RISK SCORE BADGE */}
+                      <div className="shrink-0 p-3.5 rounded-xl zl-well border border-slate-800/90 flex flex-col sm:flex-row sm:items-center gap-4">
+                        <div className="shrink-0 flex items-center gap-3 px-3.5 py-2 rounded-xl bg-rose-500/10 border border-rose-500/30">
+                          <AlertTriangle className="w-5 h-5 text-rose-400 shrink-0" />
+                          <div>
+                            <div className="text-[10px] font-bold uppercase tracking-wider text-rose-300/80">
+                              Risk Assessment
+                            </div>
+                            <div className="text-base font-extrabold text-rose-300 leading-tight">
+                              {expertAnalysis.riskScore100}
+                              <span className="text-xs font-normal text-rose-300/70">/100</span> ·{' '}
+                              {expertAnalysis.riskLevel}
                             </div>
                           </div>
-                        ))}
+                        </div>
+
+                        <div className="flex-1 text-xs text-slate-200 leading-relaxed">
+                          <div className="text-[11px] font-semibold text-sky-300 mb-0.5">
+                            Analyzed using anonymous placeholders only (zero names or bank numbers
+                            exposed):
+                          </div>
+                          <TokenizedTextHighlighter
+                            text={expertAnalysis.blindExecutiveSummary}
+                            vaultEntries={sanitization.vaultEntries}
+                            mode="BLIND_CLOUD"
+                            highlightedToken={hoveredToken}
+                            onHoverToken={setHoveredToken}
+                          />
+                        </div>
+                      </div>
+
+                      {/* FINDINGS GRID */}
+                      <div className="grid grid-cols-1 md:grid-cols-3 gap-3 flex-1 min-h-0">
+                        {expertAnalysis.blindFindings.map((f, idx) => {
+                          const sev = getSeverityStyle(f.severity);
+                          return (
+                            <div
+                              key={idx}
+                              className={`rounded-xl zl-well border ${sev.cardBorder} transition overflow-hidden flex flex-col`}
+                            >
+                              <div className={`h-1 w-full shrink-0 ${sev.accentBar}`} />
+                              <div className="p-3.5 flex-1 min-h-0 overflow-y-auto space-y-2 text-xs">
+                                <div className="flex items-start justify-between gap-2">
+                                  <span className="font-bold text-white leading-snug">
+                                    <span className="font-mono text-slate-500 mr-1.5">
+                                      0{idx + 1}.
+                                    </span>
+                                    {f.title}
+                                  </span>
+                                  <span
+                                    className={`px-2 py-0.5 rounded-md text-[10px] font-bold shrink-0 ${sev.pill}`}
+                                  >
+                                    {f.severity}
+                                  </span>
+                                </div>
+                                <div className="text-slate-300">
+                                  <TokenizedTextHighlighter
+                                    text={f.blindExplanation}
+                                    vaultEntries={sanitization.vaultEntries}
+                                    mode="BLIND_CLOUD"
+                                    highlightedToken={hoveredToken}
+                                    onHoverToken={setHoveredToken}
+                                  />
+                                </div>
+                              </div>
+                            </div>
+                          );
+                        })}
                       </div>
                     </>
                   )}
@@ -815,37 +1196,62 @@ Prepared for Executive ${nameToUse} (Direct Contact: ${contactToUse}, Private Ac
               </div>
             )}
 
-            {/* ==================== STEP 4: FINAL UNLOCKED REPORT (ZERO SCROLL!) ==================== */}
+            {/* ==================== STEP 4: FINAL UNLOCKED REPORT ==================== */}
             {step === 4 && expertAnalysis && sanitization && (
-              <div className="flex-1 min-h-0 rounded-2xl bg-slate-900/85 border border-emerald-500/40 shadow-2xl overflow-hidden flex flex-col">
-                <div className="px-5 py-2.5 border-b border-slate-800 bg-slate-900 shrink-0 flex flex-wrap items-center justify-between gap-2">
-                  <div className="flex items-center gap-2">
-                    <Unlock className="w-4 h-4 text-emerald-400" />
-                    <span className="text-sm font-bold text-white">
-                      Step 4 · Final Report Unlocked in Local RAM (0 ms · 0 Network Bytes)
+              <div className="zl-stage-enter flex-1 min-h-0 rounded-2xl zl-surface border border-emerald-500/35 overflow-hidden flex flex-col">
+                <div className="px-5 py-2.5 border-b border-slate-800/80 bg-slate-900/70 shrink-0 flex flex-wrap items-center justify-between gap-2">
+                  <div className="flex items-center gap-2.5">
+                    <span className="w-6 h-6 rounded-lg bg-emerald-500/15 border border-emerald-500/35 flex items-center justify-center">
+                      <Unlock className="w-3.5 h-3.5 text-emerald-400" />
                     </span>
+                    <div>
+                      <span className="text-sm font-bold text-white">
+                        Step 4 · Report Restored in Local RAM
+                      </span>
+                      <span className="hidden md:inline text-xs font-mono text-emerald-400 ml-2">
+                        (&lt;1 ms · 0 network bytes)
+                      </span>
+                    </div>
                   </div>
 
                   <div className="flex items-center gap-2">
-                    <button
-                      onClick={() => setStep4CompareBlind((v) => !v)}
-                      className="px-2.5 py-1 rounded-lg bg-slate-800 hover:bg-slate-700 text-xs font-semibold text-slate-200 border border-slate-700 cursor-pointer"
-                    >
-                      {step4CompareBlind ? '🔓 Show Unlocked Names' : '☁️ Compare Blind Cloud'}
-                    </button>
+                    {/* Prominent Segmented Toggle: Unlocked vs Blind Cloud */}
+                    <div className="inline-flex items-center bg-slate-950 p-0.5 rounded-lg border border-slate-800">
+                      <button
+                        onClick={() => setStep4CompareBlind(false)}
+                        className={`px-2.5 py-1 rounded-md text-xs font-bold transition cursor-pointer ${
+                          !step4CompareBlind
+                            ? 'bg-emerald-500 text-slate-950'
+                            : 'text-slate-400 hover:text-white'
+                        }`}
+                      >
+                        Restored Names
+                      </button>
+                      <button
+                        onClick={() => setStep4CompareBlind(true)}
+                        className={`px-2.5 py-1 rounded-md text-xs font-bold transition cursor-pointer ${
+                          step4CompareBlind
+                            ? 'bg-amber-400 text-slate-950'
+                            : 'text-slate-400 hover:text-white'
+                        }`}
+                      >
+                        What Cloud Saw
+                      </button>
+                    </div>
+
                     <button
                       onClick={downloadComplianceCertificate}
-                      className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg bg-emerald-500/15 hover:bg-emerald-500/25 text-xs font-semibold text-emerald-300 border border-emerald-500/30 cursor-pointer"
+                      className="inline-flex items-center gap-1.5 px-3 py-1 rounded-lg bg-emerald-500/15 hover:bg-emerald-500/25 text-xs font-semibold text-emerald-300 border border-emerald-500/35 transition cursor-pointer"
                     >
-                      <Download className="w-3.5 h-3.5" /> Zero-Leak Proof (.json)
+                      <Download className="w-3.5 h-3.5" /> Proof (.json)
                     </button>
                   </div>
                 </div>
 
                 <div className="p-4 flex-1 min-h-0 flex flex-col gap-3">
                   {/* Compact Summary Row */}
-                  <div className="shrink-0 p-3 rounded-xl bg-slate-950 border border-slate-800 flex flex-wrap items-center gap-3 text-xs">
-                    <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg bg-rose-500/15 text-rose-400 font-extrabold shrink-0">
+                  <div className="shrink-0 p-3 rounded-xl zl-well border border-slate-800/90 flex flex-wrap items-center gap-3 text-xs">
+                    <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-rose-500/15 border border-rose-500/30 text-rose-300 font-extrabold shrink-0">
                       <AlertTriangle className="w-3.5 h-3.5" />
                       {expertAnalysis.riskLevel} · {expertAnalysis.riskScore100}/100
                     </span>
@@ -854,62 +1260,82 @@ Prepared for Executive ${nameToUse} (Direct Contact: ${contactToUse}, Private Ac
                         text={expertAnalysis.blindExecutiveSummary}
                         vaultEntries={sanitization.vaultEntries}
                         mode={step4CompareBlind ? 'BLIND_CLOUD' : 'REHYDRATED_LOCAL'}
+                        highlightedToken={hoveredToken}
+                        onHoverToken={setHoveredToken}
                       />
                     </div>
                   </div>
 
-                  {/* Side-by-Side Findings (Left) + Protective Revision (Right) so 0 scrolling needed! */}
+                  {/* Side-by-Side Remedies (Left) + Protective Revision (Right) */}
                   <div className="flex-1 min-h-0 grid grid-cols-1 lg:grid-cols-12 gap-3.5">
                     <div className="lg:col-span-7 min-h-0 overflow-y-auto space-y-2.5 pr-1">
-                      {expertAnalysis.blindFindings.map((f, i) => (
-                        <div
-                          key={i}
-                          className="p-3 rounded-xl bg-slate-950 border border-slate-800 space-y-1 text-xs"
-                        >
-                          <div className="flex items-center justify-between gap-2">
-                            <span className="font-bold text-white">{f.title}</span>
-                            <span className="px-2 py-0.5 rounded bg-rose-500/20 text-rose-300 text-[10px] font-bold shrink-0">
-                              {f.severity}
-                            </span>
+                      {expertAnalysis.blindFindings.map((f, i) => {
+                        const sev = getSeverityStyle(f.severity);
+                        return (
+                          <div
+                            key={i}
+                            className="p-3.5 rounded-xl zl-well border border-slate-800/90 space-y-1.5 text-xs"
+                          >
+                            <div className="flex items-center justify-between gap-2">
+                              <span className="font-bold text-white">
+                                <span className="font-mono text-slate-500 mr-1.5">0{i + 1}.</span>
+                                {f.title}
+                              </span>
+                              <span
+                                className={`px-2 py-0.5 rounded-md text-[10px] font-bold shrink-0 ${sev.pill}`}
+                              >
+                                {f.severity}
+                              </span>
+                            </div>
+                            <div className="text-slate-200">
+                              <span className="font-bold text-emerald-400 mr-1">
+                                Recommended Fix:
+                              </span>
+                              <TokenizedTextHighlighter
+                                text={f.blindRecommendation}
+                                vaultEntries={sanitization.vaultEntries}
+                                mode={step4CompareBlind ? 'BLIND_CLOUD' : 'REHYDRATED_LOCAL'}
+                                highlightedToken={hoveredToken}
+                                onHoverToken={setHoveredToken}
+                              />
+                            </div>
                           </div>
-                          <div className="text-emerald-300 leading-relaxed">
-                            <strong>Fix: </strong>
-                            <TokenizedTextHighlighter
-                              text={f.blindRecommendation}
-                              vaultEntries={sanitization.vaultEntries}
-                              mode={step4CompareBlind ? 'BLIND_CLOUD' : 'REHYDRATED_LOCAL'}
-                            />
-                          </div>
-                        </div>
-                      ))}
+                        );
+                      })}
                     </div>
 
-                    <div className="lg:col-span-5 min-h-0 rounded-xl bg-emerald-950/25 border border-emerald-500/35 p-3.5 flex flex-col gap-2">
-                      <div className="shrink-0 flex items-center justify-between">
+                    <div className="lg:col-span-5 min-h-0 rounded-xl bg-gradient-to-b from-emerald-950/35 to-slate-950/90 border border-emerald-500/35 p-3.5 flex flex-col gap-2.5 shadow-[inset_0_1px_0_rgba(52,211,153,0.12)]">
+                      <div className="shrink-0 flex items-center justify-between pb-2 border-b border-emerald-500/20">
                         <span className="text-xs font-bold text-emerald-300 flex items-center gap-1.5">
                           <Sparkles className="w-3.5 h-3.5" /> Ready-to-Send Revision
                         </span>
                         <button
                           onClick={copyRehydratedAction}
-                          className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-bold cursor-pointer"
+                          className="inline-flex items-center gap-1.5 px-3 py-1 rounded-lg bg-emerald-500 hover:bg-emerald-400 text-slate-950 text-xs font-extrabold transition cursor-pointer"
                         >
                           {copiedRedline ? (
                             <>
-                              <Check className="w-3 h-3" /> Copied!
+                              <Check className="w-3.5 h-3.5" /> Copied
                             </>
                           ) : (
                             <>
-                              <Copy className="w-3 h-3" /> Copy Text
+                              <Copy className="w-3.5 h-3.5" /> Copy Text
                             </>
                           )}
                         </button>
                       </div>
-                      <div className="flex-1 min-h-0 overflow-y-auto text-xs text-slate-100 font-mono leading-relaxed">
+                      <div className="flex-1 min-h-0 overflow-y-auto text-xs text-slate-100 font-mono">
                         <TokenizedTextHighlighter
                           text={expertAnalysis.blindRedraftedActionText}
                           vaultEntries={sanitization.vaultEntries}
                           mode={step4CompareBlind ? 'BLIND_CLOUD' : 'REHYDRATED_LOCAL'}
+                          highlightedToken={hoveredToken}
+                          onHoverToken={setHoveredToken}
                         />
+                      </div>
+                      <div className="shrink-0 pt-2 border-t border-emerald-500/15 flex items-center justify-between text-[10px] font-mono text-slate-400">
+                        <span>Firestore SHA-256 Proof Synced</span>
+                        <span className="text-emerald-400">0 PII Stored</span>
                       </div>
                     </div>
                   </div>
@@ -921,85 +1347,98 @@ Prepared for Executive ${nameToUse} (Direct Contact: ${contactToUse}, Private Ac
 
         {/* TAB 2: AES-256 VAULT INSPECTOR */}
         {topTab === 'vault' && (
-          <div className="flex-1 min-h-0 p-5 rounded-2xl bg-slate-900 border border-slate-800 flex flex-col gap-4 overflow-hidden">
-            <div className="shrink-0 flex items-center justify-between">
+          <div className="zl-stage-enter flex-1 min-h-0 p-5 rounded-2xl zl-surface border border-amber-500/25 flex flex-col gap-4 overflow-hidden">
+            <div className="shrink-0 flex flex-wrap items-center justify-between gap-2 pb-3 border-b border-slate-800/80">
               <div>
-                <h2 className="text-sm font-bold text-white">
-                  Ephemeral AES-256-GCM RAM Vault ({lockedCount} Secrets)
+                <h2 className="text-sm font-bold text-white flex items-center gap-2">
+                  <Lock className="w-4 h-4 text-amber-400" />
+                  Ephemeral AES-256-GCM RAM Vault ({lockedCount} Protected Entities)
                 </h2>
-                <p className="text-xs text-slate-400">
-                  Session Key Fingerprint: <code className="text-emerald-300">{keyFingerprint}</code>
+                <p className="text-xs text-slate-400 mt-0.5">
+                  Non-extractable Web Crypto Session Key:{' '}
+                  <code className="text-amber-300 font-mono">{keyFingerprint}</code>
                 </p>
               </div>
-              <span className="px-3 py-1 rounded-full bg-emerald-500/15 text-emerald-300 text-xs font-semibold">
-                Never Sent Over Network
+              <span className="px-3 py-1 rounded-full bg-emerald-500/15 border border-emerald-500/35 text-emerald-300 text-xs font-bold">
+                100% Volatile Memory · Never Transmitted
               </span>
             </div>
 
             {sanitization ? (
-              <div className="flex-1 min-h-0 overflow-y-auto grid grid-cols-1 md:grid-cols-2 gap-3 content-start">
-                {sanitization.vaultEntries.map((v) => (
-                  <div
-                    key={v.token}
-                    className="p-3 rounded-xl bg-slate-950 border border-slate-800 flex items-center justify-between gap-3 text-xs"
-                  >
-                    <div className="min-w-0">
-                      <div className="font-semibold text-rose-300 truncate">{v.originalValue}</div>
-                      <div className="text-[11px] font-mono text-slate-500">
-                        {v.category} · AES-GCM: {v.aesCipherHex}...
+              <div className="flex-1 min-h-0 overflow-y-auto grid grid-cols-1 md:grid-cols-2 gap-3 content-start pr-1">
+                {sanitization.vaultEntries.map((v) => {
+                  const catMeta = CATEGORY_META[v.category];
+                  return (
+                    <div
+                      key={v.token}
+                      className="p-3.5 rounded-xl zl-well border border-slate-800/90 flex items-center justify-between gap-3 text-xs"
+                    >
+                      <div className="min-w-0 space-y-0.5">
+                        <span
+                          className={`inline-block text-[9px] font-bold uppercase tracking-wider px-1.5 py-0.2 rounded border ${catMeta.badgeClass}`}
+                        >
+                          {catMeta.label}
+                        </span>
+                        <div className="font-semibold text-rose-200 truncate">{v.originalValue}</div>
+                        <div className="text-[11px] font-mono text-slate-500 truncate">
+                          AES-GCM: {v.aesCipherHex}...
+                        </div>
                       </div>
+                      <span className="px-2.5 py-1 rounded-md bg-amber-500/15 border border-amber-500/35 text-amber-300 font-mono text-xs font-semibold shrink-0">
+                        {v.token}
+                      </span>
                     </div>
-                    <span className="px-2.5 py-1 rounded-md bg-amber-500/15 border border-amber-500/30 text-amber-300 font-mono text-xs shrink-0">
-                      {v.token}
-                    </span>
-                  </div>
-                ))}
+                  );
+                })}
               </div>
             ) : (
-              <p className="text-xs text-slate-400">
-                Complete Step 2 in the Guided Assistant to populate the local AES-256 RAM vault.
-              </p>
+              <div className="flex-1 flex items-center justify-center text-xs text-slate-400">
+                Run Step 2 in the Guided Workspace to populate the local AES-256 RAM vault.
+              </div>
             )}
           </div>
         )}
 
         {/* TAB 3: FIRESTORE ZERO-KNOWLEDGE LEDGER & TELEMETRY */}
         {topTab === 'ledger' && (
-          <div className="flex-1 min-h-0 grid grid-cols-1 lg:grid-cols-2 gap-5 overflow-hidden">
-            <div className="min-h-0 p-5 rounded-2xl bg-slate-900 border border-slate-800 flex flex-col gap-3">
-              <div className="shrink-0 flex items-center gap-2">
-                <Database className="w-4 h-4 text-cyan-400" />
+          <div className="zl-stage-enter flex-1 min-h-0 grid grid-cols-1 lg:grid-cols-2 gap-4 overflow-hidden">
+            <div className="min-h-0 p-5 rounded-2xl zl-surface border border-slate-800/90 flex flex-col gap-3">
+              <div className="shrink-0 flex items-center gap-2.5 pb-2.5 border-b border-slate-800/80">
+                <span className="w-7 h-7 rounded-lg bg-cyan-500/15 border border-cyan-500/30 flex items-center justify-center">
+                  <Database className="w-4 h-4 text-cyan-400" />
+                </span>
                 <div>
                   <h2 className="text-sm font-bold text-white">
-                    Cloud Firestore Zero-Knowledge Audit Ledger ({auditLedger.length})
+                    Cloud Firestore Zero-Knowledge Audit Log ({auditLedger.length})
                   </h2>
                   <p className="text-xs text-slate-400">
-                    Stores cryptographic SHA-256 proofs &amp; risk scores only (0 bytes of PII)
+                    Stores SHA-256 hashes &amp; risk scores enforced by{' '}
+                    <code className="font-mono text-cyan-300">firestore.rules</code> (0 bytes PII)
                   </p>
                 </div>
               </div>
-              <div className="flex-1 min-h-0 overflow-y-auto space-y-2">
+              <div className="flex-1 min-h-0 overflow-y-auto space-y-2 pr-1">
                 {auditLedger.length === 0 && (
-                  <p className="text-xs text-slate-500">
-                    Run Step 3 to record a Zero-Knowledge SHA-256 compliance proof.
+                  <p className="text-xs text-slate-500 pt-4">
+                    Complete Step 3 to record a Zero-Knowledge SHA-256 verification entry.
                   </p>
                 )}
                 {auditLedger.map((item) => (
                   <div
                     key={item.id}
-                    className="p-3 rounded-xl bg-slate-950 border border-slate-800 flex items-center justify-between gap-3 text-xs"
+                    className="p-3.5 rounded-xl zl-well border border-slate-800/90 flex items-center justify-between gap-3 text-xs"
                   >
                     <div className="min-w-0">
                       <div className="font-bold text-white flex items-center gap-1.5">
                         <FileCheck2 className="w-4 h-4 text-emerald-400 shrink-0" />
                         <span className="truncate">{item.docTitle}</span>
                       </div>
-                      <div className="text-[11px] font-mono text-slate-400 truncate mt-0.5">
-                        {item.entitiesProtectedCount} secrets · SHA256:{' '}
-                        {item.sha256SanitizedHash.slice(0, 22)}...
+                      <div className="text-[11px] font-mono text-slate-400 truncate mt-1">
+                        {item.entitiesProtectedCount} masked · SHA-256:{' '}
+                        {item.sha256SanitizedHash.slice(0, 20)}...
                       </div>
                     </div>
-                    <span className="px-2.5 py-1 rounded-full bg-emerald-500/15 text-emerald-300 text-[10px] font-semibold shrink-0">
+                    <span className="px-2.5 py-1 rounded-full bg-emerald-500/15 border border-emerald-500/30 text-emerald-300 text-[10px] font-bold shrink-0">
                       {item.syncState}
                     </span>
                   </div>
@@ -1007,43 +1446,54 @@ Prepared for Executive ${nameToUse} (Direct Contact: ${contactToUse}, Private Ac
               </div>
             </div>
 
-            <div className="min-h-0 p-5 rounded-2xl bg-slate-900 border border-slate-800 flex flex-col gap-3">
-              <div className="shrink-0">
-                <h2 className="text-sm font-bold text-white">
-                  Firebase AI Logic · inferenceSource Live Telemetry
-                </h2>
-                <p className="text-xs text-slate-400">
-                  Trace of <code>ONLY_ON_DEVICE</code> and <code>PREFER_IN_CLOUD</code> calls
-                </p>
+            <div className="min-h-0 p-5 rounded-2xl zl-surface border border-slate-800/90 flex flex-col gap-3">
+              <div className="shrink-0 flex items-center gap-2.5 pb-2.5 border-b border-slate-800/80">
+                <span className="w-7 h-7 rounded-lg bg-sky-500/15 border border-sky-500/30 flex items-center justify-center">
+                  <Activity className="w-4 h-4 text-sky-400" />
+                </span>
+                <div>
+                  <h2 className="text-sm font-bold text-white">
+                    Firebase AI Logic · Live Inference Telemetry
+                  </h2>
+                  <p className="text-xs text-slate-400">
+                    Real-time trace of <code className="font-mono text-emerald-300">ONLY_ON_DEVICE</code>{' '}
+                    and <code className="font-mono text-sky-300">PREFER_IN_CLOUD</code> calls
+                  </p>
+                </div>
               </div>
-              <div className="flex-1 min-h-0 overflow-y-auto space-y-2">
+              <div className="flex-1 min-h-0 overflow-y-auto space-y-2 pr-1">
+                {telemetry.length === 0 && (
+                  <p className="text-xs text-slate-500 pt-4">
+                    Run Step 2 to see live hybrid inference telemetry events.
+                  </p>
+                )}
                 {telemetry.map((t) => (
                   <div
                     key={t.id}
-                    className="p-3 rounded-xl bg-slate-950 border border-slate-800 text-xs space-y-1"
+                    className="p-3.5 rounded-xl zl-well border border-slate-800/90 text-xs space-y-1.5"
                   >
-                    <div className="flex items-center justify-between">
+                    <div className="flex items-center justify-between gap-2">
                       <span className="font-bold text-white">{t.stage}</span>
-                      <span className="font-mono text-[11px] text-slate-400">
+                      <span className="font-mono text-[11px] text-slate-400 shrink-0">
                         {t.latencyMs} ms · {t.timestamp}
                       </span>
                     </div>
                     <div className="flex items-center gap-2">
-                      <span className="px-2 py-0.5 rounded bg-slate-800 font-mono text-[10px] text-slate-300">
+                      <span className="px-2 py-0.5 rounded bg-slate-900 border border-slate-800 font-mono text-[10px] text-slate-300">
                         {t.requestedMode}
                       </span>
-                      <span>→</span>
+                      <span className="text-slate-500">→</span>
                       <span
                         className={`px-2 py-0.5 rounded-full font-bold text-[10px] ${
                           t.actualSource === 'ON_DEVICE'
-                            ? 'bg-emerald-500/15 text-emerald-300'
-                            : 'bg-sky-500/15 text-sky-300'
+                            ? 'bg-emerald-500/15 text-emerald-300 border border-emerald-500/30'
+                            : 'bg-sky-500/15 text-sky-300 border border-sky-500/30'
                         }`}
                       >
                         {t.actualSource}
                       </span>
                     </div>
-                    <p className="text-slate-400">{t.detail}</p>
+                    <p className="text-slate-400 leading-relaxed">{t.detail}</p>
                   </div>
                 ))}
               </div>
